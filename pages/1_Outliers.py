@@ -62,3 +62,60 @@ st.caption("""
 **CBD** = Cumulative Benchmark Deviation (area under company-benchmark curve over selected years)  
 **z** = Z-score (standard deviations from sector average). Values beyond ±2 indicate statistical outliers.
 """)
+
+# Download section for outliers
+st.subheader('Downloads')
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    if not good.empty:
+        good_download = good.copy()
+        good_download['Analysis_Type'] = 'Best_Aligned'
+        good_download['Sector'] = sector
+        good_download['Scenario'] = scenario
+        if region_pref:
+            good_download['Region'] = region_pref
+        good_download['Analysis_Period'] = f"{start}-{end}"
+        csv_data = good_download.to_csv(index=False)
+        st.download_button(
+            label="Download Best Aligned CSV",
+            data=csv_data,
+            file_name=f"best_aligned_{sector.replace(' ', '_')}_{start}_{end}.csv",
+            mime="text/csv"
+        )
+
+with col2:
+    if not bad.empty:
+        bad_download = bad.copy()
+        bad_download['Analysis_Type'] = 'Worst_Aligned'
+        bad_download['Sector'] = sector
+        bad_download['Scenario'] = scenario
+        if region_pref:
+            bad_download['Region'] = region_pref
+        bad_download['Analysis_Period'] = f"{start}-{end}"
+        csv_data = bad_download.to_csv(index=False)
+        st.download_button(
+            label="Download Worst Aligned CSV",
+            data=csv_data,
+            file_name=f"worst_aligned_{sector.replace(' ', '_')}_{start}_{end}.csv",
+            mime="text/csv"
+        )
+
+with col3:
+    if not good.empty and not bad.empty:
+        combined_outliers = pd.concat([
+            good.assign(Analysis_Type='Best_Aligned'),
+            bad.assign(Analysis_Type='Worst_Aligned')
+        ], ignore_index=True)
+        combined_outliers['Sector'] = sector
+        combined_outliers['Scenario'] = scenario
+        if region_pref:
+            combined_outliers['Region'] = region_pref
+        combined_outliers['Analysis_Period'] = f"{start}-{end}"
+        csv_data = combined_outliers.to_csv(index=False)
+        st.download_button(
+            label="Download All Outliers CSV",
+            data=csv_data,
+            file_name=f"all_outliers_{sector.replace(' ', '_')}_{start}_{end}.csv",
+            mime="text/csv"
+        )

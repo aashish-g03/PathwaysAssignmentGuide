@@ -103,3 +103,112 @@ if 'Unit' in f_cp.columns:
 display_name = f"{company} ({subsector})" if subsector else company
 fig = pathway_figure(f_cp[['Year','Intensity']], scenario_map, unit_hint, display_name)
 st.plotly_chart(fig, use_container_width=True)
+
+# Download section
+st.subheader('Downloads')
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    # Company data download
+    company_download = f_cp[['Year', 'Intensity']].copy()
+    company_download['Company'] = display_name
+    company_download['Sector'] = sector
+    if subsector:
+        company_download['Subsector'] = subsector
+    csv_data = company_download.to_csv(index=False)
+    st.download_button(
+        label="Download Company Data CSV",
+        data=csv_data,
+        file_name=f"{company.replace(' ', '_')}_pathways_data.csv",
+        mime="text/csv"
+    )
+
+with col2:
+    # Benchmark data download
+    if scenario_map:
+        benchmark_download = pd.DataFrame()
+        for scenario_name, scenario_data in scenario_map.items():
+            if not scenario_data.empty:
+                scenario_df = scenario_data.copy()
+                scenario_df['Scenario'] = scenario_name
+                scenario_df['Sector'] = sector
+                if region:
+                    scenario_df['Region'] = region
+                benchmark_download = pd.concat([benchmark_download, scenario_df], ignore_index=True)
+        
+        if not benchmark_download.empty:
+            csv_data = benchmark_download.to_csv(index=False)
+            st.download_button(
+                label="Download Benchmark Data CSV",
+                data=csv_data,
+                file_name=f"{sector.replace(' ', '_')}_benchmark_data.csv",
+                mime="text/csv"
+            )
+
+with col3:
+    # Combined data download
+    if scenario_map and not f_cp.empty:
+        combined_data = f_cp[['Year', 'Intensity']].copy()
+        combined_data['Company'] = display_name
+        combined_data['Sector'] = sector
+        combined_data['Scenario'] = 'Actual'
+        combined_data['Data_Type'] = 'Company'
+        if subsector:
+            combined_data['Subsector'] = subsector
+        if region:
+            combined_data['Region'] = region
+        
+        benchmark_combined = pd.DataFrame()
+        for scenario_name, scenario_data in scenario_map.items():
+            if not scenario_data.empty:
+                scenario_df = scenario_data.copy()
+                scenario_df = scenario_df.rename(columns={'Benchmark': 'Intensity'})
+                scenario_df['Company'] = display_name
+                scenario_df['Sector'] = sector
+                scenario_df['Scenario'] = scenario_name
+                scenario_df['Data_Type'] = 'Benchmark'
+                if subsector:
+                    scenario_df['Subsector'] = subsector
+                if region:
+                    scenario_df['Region'] = region
+                benchmark_combined = pd.concat([benchmark_combined, scenario_df], ignore_index=True)
+        
+        if not benchmark_combined.empty:
+            all_data = pd.concat([combined_data, benchmark_combined], ignore_index=True)
+            csv_data = all_data.to_csv(index=False)
+            st.download_button(
+                label="Download All Data CSV",
+                data=csv_data,
+                file_name=f"{company.replace(' ', '_')}_complete_analysis.csv",
+                mime="text/csv"
+            )
+
+# Methodology Notes
+with st.expander("Methodology Notes"):
+    st.markdown("""
+    **Data Sources & Processing:**
+    - **Company Data**: TPI Company Latest Assessments v5.0 - carbon intensity trajectories by sector
+    - **Benchmark Data**: TPI Sector Benchmarks (Sept 2025) - climate scenario pathways aligned with temperature goals
+    
+    **Scenario Normalization:**
+    - Scenario labels standardized: "1.5 Degrees" → "1.5°C", "International Pledges" → "National Pledges"
+    - All temperature scenarios expressed in consistent °C notation for clarity
+    
+    **Unit Handling:**
+    - Company and benchmark data automatically matched by sector and unit type
+    - Y-axis displays detected unit from company data (e.g., tCO2e/MWh, kgCO2e/tonne)
+    
+    **Region Fallback Logic:**
+    - Benchmark data matched by exact region selection when available
+    - Automatically falls back to "Global" benchmarks if selected region unavailable for specific scenarios
+    
+    **Carbon Budget Deviation (CBD):**
+    - Visual zones represent alignment ranges: Green (1.5°C line), Amber (between 1.5°C-2°C), Red (above 2°C toward pledges)
+    - Company trajectory compared against scenario bands to assess climate alignment
+    
+    **Year Range Defaults:**
+    - Default analysis window: 2015-2035 (adjustable via slider)
+    - Focuses on near-term transition period most relevant for corporate climate action
+    """)
+
+st.divider()

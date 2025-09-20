@@ -2,12 +2,12 @@ import numpy as np
 import plotly.graph_objs as go
 import pandas as pd
 
-def _band(fig, x, lower, upper, name, color='rgba(108, 117, 125, 0.3)', opacity=0.3):
+def _band(fig, x, lower, upper, name, fillcolor='rgba(108, 117, 125, 0.3)'):
     fig.add_trace(go.Scatter(x=x, y=upper, mode='lines', line=dict(width=0),
                              showlegend=False, hoverinfo='skip'))
     fig.add_trace(go.Scatter(x=x, y=lower, mode='lines', line=dict(width=0, color='rgba(0,0,0,0)'),
-                             fill='tonexty', name=name, fillcolor=color, 
-                             opacity=opacity, hoverinfo='skip'))
+                             fill='tonexty', name=name, fillcolor=fillcolor, 
+                             showlegend=True, hoverinfo='skip'))
 
 def pathway_figure(df_company: pd.DataFrame, scenario_map: dict, unit_hint: str, company: str):
     fig = go.Figure()
@@ -23,7 +23,7 @@ def pathway_figure(df_company: pd.DataFrame, scenario_map: dict, unit_hint: str,
         
         y1 = green_clean.set_index('Year').reindex(years)['Benchmark'].values
         y2 = below2_clean.set_index('Year').reindex(years)['Benchmark'].values
-        _band(fig, years, np.minimum(y1,y2), np.maximum(y1,y2), 'Between 1.5°C and Below 2°C')
+        _band(fig, years, np.minimum(y1,y2), np.maximum(y1,y2), 'Between 1.5°C and Below 2°C', fillcolor='rgba(245, 158, 11, 0.4)')
 
     if below2 is not None and pledges is not None and not below2.empty and not pledges.empty:
         below2_clean = below2.groupby('Year')['Benchmark'].mean().reset_index()
@@ -31,10 +31,30 @@ def pathway_figure(df_company: pd.DataFrame, scenario_map: dict, unit_hint: str,
         
         y2 = below2_clean.set_index('Year').reindex(years)['Benchmark'].values
         y3 = pledges_clean.set_index('Year').reindex(years)['Benchmark'].values
-        _band(fig, years, np.minimum(y2,y3), np.maximum(y2,y3), 'Above Below 2°C')
+        _band(fig, years, np.minimum(y2,y3), np.maximum(y2,y3), 'Above Below 2°C', fillcolor='rgba(239, 68, 68, 0.4)')
 
+    if green is not None and not green.empty:
+        green_clean = green.groupby('Year')['Benchmark'].mean().reset_index()
+        fig.add_trace(go.Scatter(x=green_clean['Year'], y=green_clean['Benchmark'], 
+                                mode='lines', name='1.5°C', 
+                                line=dict(color='#22C55E', width=2, dash='dash')))
+    
+    if below2 is not None and not below2.empty:
+        below2_clean = below2.groupby('Year')['Benchmark'].mean().reset_index()
+        fig.add_trace(go.Scatter(x=below2_clean['Year'], y=below2_clean['Benchmark'], 
+                                mode='lines', name='Below 2°C', 
+                                line=dict(color='#F59E0B', width=2)))
+    
+    if pledges is not None and not pledges.empty:
+        pledges_clean = pledges.groupby('Year')['Benchmark'].mean().reset_index()
+        fig.add_trace(go.Scatter(x=pledges_clean['Year'], y=pledges_clean['Benchmark'], 
+                                mode='lines', name='National Pledges', 
+                                line=dict(color='#EF4444', width=2)))
+    
     cs = df_company.sort_values('Year')
-    fig.add_trace(go.Scatter(x=cs['Year'], y=cs['Intensity'], mode='lines+markers', name=company))
+    fig.add_trace(go.Scatter(x=cs['Year'], y=cs['Intensity'], mode='lines+markers', 
+                            name=company, line=dict(color='#1F2937', width=3),
+                            marker=dict(size=6, color='#1F2937')))
 
     fig.update_layout(
         xaxis_title='Year',
