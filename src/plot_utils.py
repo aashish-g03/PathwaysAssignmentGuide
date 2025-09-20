@@ -10,7 +10,7 @@ PALETTE = {
     "orange_light": "#FDBA74"
 }
 
-def _band(fig, x, lower, upper, name, color_hex, opacity=0.20):
+def _band(fig, x, lower, upper, name, color_hex, opacity=0.20, outline=True):
     lower = np.array(lower, dtype=float)
     upper = np.array(upper, dtype=float)
     mask = ~(np.isnan(lower) | np.isnan(upper))
@@ -31,11 +31,11 @@ def _band(fig, x, lower, upper, name, color_hex, opacity=0.20):
         fillcolor=f"rgba({int(color_hex[1:3],16)},{int(color_hex[3:5],16)},{int(color_hex[5:7],16)},{opacity})",
         name=name, hoverinfo="skip"
     ))
-    fig.add_trace(go.Scatter(
-        x=x_m, y=up, mode="lines",
-        line=dict(width=1, color=color_hex),
-        showlegend=False, hoverinfo="skip"
-    ))
+    
+    if outline:
+        fig.add_trace(go.Scatter(x=x_m, y=up, mode="lines",
+                                 line=dict(width=1, color=color_hex),
+                                 showlegend=False, hoverinfo="skip"))
 
 def pathway_figure(df_company: pd.DataFrame, scenario_map: dict, unit_hint: str, company: str):
     fig = go.Figure()
@@ -65,7 +65,7 @@ def pathway_figure(df_company: pd.DataFrame, scenario_map: dict, unit_hint: str,
         g = green.groupby("Year")["Benchmark"].mean().reset_index()
         y1 = g.set_index("Year").reindex(years)["Benchmark"].values.astype(float)
         baseline = max(0.0, float(np.nanmin([np.nanmin(y1), cs["Intensity"].min()])))
-        _band(fig, years, np.full_like(y1, baseline), y1, "Below 1.5°C", PALETTE["green"], opacity=0.12)
+        _band(fig, years, np.full_like(y1, baseline), y1, "Below 1.5°C", PALETTE["green"], opacity=0.12, outline=False)
 
     # Between 1.5°C and Below 2°C
     if green is not None and not green.empty and below2 is not None and not below2.empty:
