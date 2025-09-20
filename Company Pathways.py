@@ -91,6 +91,7 @@ for s in scenarios:
             sset = sb_long[q & (sb_long['Region']=='Global')]
     else:
         sset = sb_long[q]
+    sset = sset[(sset['Year'] >= y0) & (sset['Year'] <= y1)]
     sset_clean = sset[['Year','Benchmark']].dropna().groupby('Year')['Benchmark'].mean().reset_index()
     scenario_map[s] = sset_clean
 
