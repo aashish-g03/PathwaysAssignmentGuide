@@ -1,0 +1,56 @@
+{
+  "intents": {
+    "definition": {
+      "triggers": [
+        "what is",
+        "define",
+        "meaning",
+        "unit",
+        "scenario",
+        "cbd",
+        "methodology"
+      ],
+      "handler": "definition_handler"
+    },
+    "slice_request": {
+      "triggers": [
+        "get",
+        "show",
+        "download",
+        "export",
+        "filter",
+        "give me",
+        "compare",
+        "slice"
+      ],
+      "handler": "slice_handler",
+      "params": [
+        "sector",
+        "company",
+        "region",
+        "scenarios",
+        "year_window"
+      ]
+    },
+    "explain_view": {
+      "triggers": [
+        "explain",
+        "summarize",
+        "what does this chart",
+        "how aligned",
+        "delta"
+      ],
+      "handler": "explain_handler"
+    },
+    "diagnostics": {
+      "triggers": [
+        "why missing",
+        "coverage",
+        "available",
+        "not showing",
+        "no data"
+      ],
+      "handler": "diagnostics_handler"
+    }
+  }
+}

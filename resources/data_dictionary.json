@@ -1,0 +1,11 @@
+{
+  "Company": "Company legal name from the vendor file.",
+  "Sector": "TPI sector name used to join company and benchmark tables.",
+  "Region": "Benchmark region slice. If exact region is unavailable the app can fall back to Global.",
+  "Scenario": "Benchmark pathway label normalized to '1.5\u00b0C', 'Below 2\u00b0C', 'National Pledges'.",
+  "Year": "Calendar year.",
+  "Intensity": "Company emissions intensity value (company fact table).",
+  "Benchmark": "Sector benchmark intensity value for a given scenario/region (benchmark fact table).",
+  "CBD": "Cumulative Budget Deviation: trapezoid area of (company \u2212 benchmark) over a year window; negative is better.",
+  "Bands": "Background fills: below 1.5\u00b0C (light green), between 1.5\u00b0C and 2\u00b0C (amber), above 2\u00b0C (red)."
+}

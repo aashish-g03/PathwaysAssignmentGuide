@@ -2,7 +2,9 @@ import os
 import streamlit as st
 import pandas as pd
 
-from src.io_utils import load_company_csv, load_benchmark_csv
+from src.io_utils import load_tables
+from src.analytics import (view_pathway, view_sector_companies, view_company_year_bounds,
+                         view_company_subsectors, view_sector_regions_scenarios)
 from src.plot_utils import pathway_figure
 
 st.set_page_config(
@@ -15,31 +17,32 @@ DATA_COMPANY = 'data/Company_Latest_Assessments_5.0.csv'
 DATA_BENCH   = 'data/Sector_Benchmarks_19092025.csv'
 
 @st.cache_data(show_spinner=True)
-def load_data(cp_path: str, sb_path: str):
-    cp_long = load_company_csv(cp_path)
-    sb_long = load_benchmark_csv(sb_path)
-    return cp_long, sb_long
+def load_fact_tables():
+    return load_tables()
 
 st.title('Company Pathways')
 
-# Load data
-cp_long, sb_long = load_data(DATA_COMPANY, DATA_BENCH)
+# Load data from CSV files in form of fact tables
+fact_company, fact_benchmark = load_fact_tables()
 
-# Controls
-sectors_with_data = sorted(list(set(cp_long['Sector'].dropna().unique()) & set(sb_long['Sector'].dropna().unique())))
+company_sectors = fact_company.index.get_level_values('sector').unique()
+benchmark_sectors = fact_benchmark.index.get_level_values('sector').unique()
+
+sectors_with_data = sorted(list(company_sectors))
+sectors_with_benchmarks = sorted(list(set(company_sectors) & set(benchmark_sectors)))
+
 if not sectors_with_data:
-    st.error('No overlapping sectors between company and benchmark data.')
+    st.error('No company sector data available.')
     st.stop()
 
 col1, col2 = st.columns(2)
 with col1:
     sector = st.selectbox('Sector', sectors_with_data)
-    companies = sorted(cp_long[cp_long['Sector']==sector]['Company'].dropna().unique())
+    
+    companies = view_sector_companies(fact_company, sector)
     company = st.selectbox('Company', companies)
     
-    # Handle subsector selection for companies with multiple subsectors
-    company_data = cp_long[(cp_long['Sector']==sector) & (cp_long['Company']==company)]
-    subsectors = sorted(company_data['Subsector'].dropna().unique()) if 'Subsector' in company_data.columns else []
+    subsectors = view_company_subsectors(fact_company, sector, company)
     
     subsector = None
     if len(subsectors) > 1:
@@ -50,79 +53,73 @@ with col1:
         subsector = subsectors[0]
         st.caption(f"Subsector: **{subsector}**")
     else:
-        # Most companies don't have subsector breakdowns
         st.caption("Analyzing consolidated company-level data")
 
 with col2:
-    region = None
-    if 'Region' in sb_long.columns:
-        options = sorted(sb_long[sb_long['Sector']==sector]['Region'].dropna().unique())
-        if options:
-            region = st.selectbox('Benchmark Region', options, index=0)
-    scenario_opts = sorted(sb_long[sb_long['Sector']==sector]['Scenario'].dropna().unique()) if 'Scenario' in sb_long.columns else []
-    default_scenarios = [s for s in ['1.5°C','Below 2°C','National Pledges'] if s in scenario_opts]
-    scenarios = st.multiselect('Scenarios', scenario_opts, default=default_scenarios or scenario_opts[:2])
-
-# Filter data by sector and company
-f_cp = cp_long[(cp_long['Sector']==sector) & (cp_long['Company']==company)]
-
-# Apply subsector filtering if applicable
-if subsector and 'Subsector' in f_cp.columns:
-    f_cp = f_cp[f_cp['Subsector']==subsector]
-    if len(f_cp) == 0:
-        st.warning(f"No data found for {company} in {subsector} subsector.")
-        st.stop()
-
-if 'Year' in f_cp.columns:
-    # year slider bounds:
-    y_min, y_max = int(f_cp['Year'].min()), int(f_cp['Year'].max())
-    year_range = st.slider('Year range', y_min, y_max, (max(y_min,2015), min(y_max,2035)))
-    f_cp = f_cp[(f_cp['Year']>=year_range[0]) & (f_cp['Year']<=year_range[1])]
-
-# Build scenario series
-scenario_map = {}
-y0, y1 = year_range if 'Year' in f_cp.columns else (2015, 2035)
-for s in scenarios:
-    q = (sb_long['Sector']==sector) & (sb_long['Scenario']==s)
-    if region and 'Region' in sb_long.columns:
-        # prefer exact region; fallback to Global
-        sset = sb_long[q & (sb_long['Region']==region)]
-        if sset.empty:
-            sset = sb_long[q & (sb_long['Region']=='Global')]
+    has_benchmark_data = sector in sectors_with_benchmarks
+    
+    if has_benchmark_data:
+        region_options, scenario_opts = view_sector_regions_scenarios(fact_benchmark, sector)
+        
+        region = None
+        if region_options:
+            region = st.selectbox('Benchmark Region', region_options, index=0)
+        
+        default_scenarios = [s for s in ['1.5°C','Below 2°C','National Pledges'] if s in scenario_opts]
+        scenarios = st.multiselect('Scenarios', scenario_opts, default=default_scenarios or scenario_opts[:2])
     else:
-        sset = sb_long[q]
-    sset = sset[(sset['Year'] >= y0) & (sset['Year'] <= y1)]
-    sset_clean = sset[['Year','Benchmark']].dropna().groupby('Year')['Benchmark'].mean().reset_index()
-    scenario_map[s] = sset_clean
+        st.warning(f"**{sector}** sector has company data but no benchmark scenarios available.")
+        st.info("You can still view company data, but pathway comparisons won't be possible.")
+        region = None
+        scenarios = []
+
+y_min, y_max = view_company_year_bounds(fact_company, sector, company, subsector)
+
+if y_min is None or y_max is None:
+    if subsector:
+        st.warning(f"No data found for {company} in {subsector} subsector.")
+    else:
+        st.warning(f"No data found for {company} in {sector} sector.")
+    st.stop()
+
+year_range = st.slider('Year range', y_min, y_max, (max(y_min,2015), min(y_max,2035)))
+
+company_df, scenario_map, bands = view_pathway(
+    fact_company, fact_benchmark, sector, company, 
+    region, scenarios, year_range, subsector, exact_region=False
+)
 
 unit_hint = ''
-if 'Unit' in f_cp.columns:
-    u = f_cp['Unit'].dropna().astype(str)
-    if not u.empty:
-        unit_hint = u.iloc[0]
+if 'unit' in company_df.columns:
+    units = company_df['unit'].dropna().astype(str)
+    if not units.empty:
+        unit_hint = units.iloc[0]
 
-# Create display name with subsector info
 display_name = f"{company} ({subsector})" if subsector else company
-
 badge_scenarios = ', '.join(scenarios) if scenarios else 'None'
 badge_region = region if region else 'Global'
-badge_years = f"{y0}-{y1}"
+y_start, y_end = year_range
+badge_years = f"{y_start}-{y_end}"
 st.caption(f"**Sector:** {sector} • **Region:** {badge_region} • **Scenarios:** {badge_scenarios} • **Years:** {badge_years}")
 
-fig = pathway_figure(f_cp[['Year','Intensity']], scenario_map, unit_hint, display_name)
+visualization_data = company_df[['year', 'intensity']].rename(columns={'year': 'Year', 'intensity': 'Intensity'})
+scenario_map_viz = {k: v.rename(columns={'year': 'Year', 'benchmark': 'Benchmark'}) for k, v in scenario_map.items()}
+
+fig = pathway_figure(visualization_data, scenario_map_viz, unit_hint, display_name)
 st.plotly_chart(fig, use_container_width=True)
 
-# Download section
 st.subheader('Downloads')
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    # Company data download
-    company_download = f_cp[['Year', 'Intensity']].copy()
-    company_download['Company'] = display_name
-    company_download['Sector'] = sector
-    if subsector:
-        company_download['Subsector'] = subsector
+    if not company_df.empty:
+        company_download = company_df[['year', 'intensity']].rename(columns={'year': 'Year', 'intensity': 'Intensity'})
+        company_download = company_download.assign(
+            Company=display_name,
+            Sector=sector
+        )
+        if subsector:
+            company_download = company_download.assign(Subsector=subsector)
     csv_data = company_download.to_csv(index=False)
     st.download_button(
         label="Download Company Data CSV",
@@ -132,17 +129,23 @@ with col1:
     )
 
 with col2:
-    # Benchmark data download
     if scenario_map:
-        benchmark_download = pd.DataFrame()
+        benchmark_frames = []
         for scenario_name, scenario_data in scenario_map.items():
             if not scenario_data.empty:
-                scenario_df = scenario_data.copy()
-                scenario_df['Scenario'] = scenario_name
-                scenario_df['Sector'] = sector
+                enhanced_scenario = (
+                    scenario_data
+                    .rename(columns={'year': 'Year', 'benchmark': 'Benchmark'})
+                    .assign(Scenario=scenario_name, Sector=sector)
+                )
                 if region:
-                    scenario_df['Region'] = region
-                benchmark_download = pd.concat([benchmark_download, scenario_df], ignore_index=True)
+                    enhanced_scenario = enhanced_scenario.assign(Region=region)
+                benchmark_frames.append(enhanced_scenario)
+        
+        if benchmark_frames:
+            benchmark_download = pd.concat(benchmark_frames, ignore_index=True)
+        else:
+            benchmark_download = pd.DataFrame()
         
         if not benchmark_download.empty:
             csv_data = benchmark_download.to_csv(index=False)
@@ -154,44 +157,55 @@ with col2:
             )
 
 with col3:
-    # Combined data download
-    if scenario_map and not f_cp.empty:
-        combined_data = f_cp[['Year', 'Intensity']].copy()
-        combined_data['Company'] = display_name
-        combined_data['Sector'] = sector
-        combined_data['Scenario'] = 'Actual'
-        combined_data['Data_Type'] = 'Company'
+    if scenario_map and not company_df.empty:
+        company_standardized = (
+            company_df[['year', 'intensity']]
+            .rename(columns={'year': 'Year', 'intensity': 'Intensity'})
+            .assign(
+                Company=display_name,
+                Sector=sector,
+                Scenario='Actual',
+                Data_Type='Company'
+            )
+        )
         if subsector:
-            combined_data['Subsector'] = subsector
+            company_standardized = company_standardized.assign(Subsector=subsector)
         if region:
-            combined_data['Region'] = region
+            company_standardized = company_standardized.assign(Region=region)
         
-        benchmark_combined = pd.DataFrame()
+        benchmark_frames = []
         for scenario_name, scenario_data in scenario_map.items():
             if not scenario_data.empty:
-                scenario_df = scenario_data.copy()
-                scenario_df = scenario_df.rename(columns={'Benchmark': 'Intensity'})
-                scenario_df['Company'] = display_name
-                scenario_df['Sector'] = sector
-                scenario_df['Scenario'] = scenario_name
-                scenario_df['Data_Type'] = 'Benchmark'
+                scenario_standardized = (
+                    scenario_data
+                    .rename(columns={'year': 'Year', 'benchmark': 'Intensity'})
+                    .assign(
+                        Company=display_name,
+                        Sector=sector,
+                        Scenario=scenario_name,
+                        Data_Type='Benchmark'
+                    )
+                )
                 if subsector:
-                    scenario_df['Subsector'] = subsector
+                    scenario_standardized = scenario_standardized.assign(Subsector=subsector)
                 if region:
-                    scenario_df['Region'] = region
-                benchmark_combined = pd.concat([benchmark_combined, scenario_df], ignore_index=True)
+                    scenario_standardized = scenario_standardized.assign(Region=region)
+                benchmark_frames.append(scenario_standardized)
         
-        if not benchmark_combined.empty:
-            all_data = pd.concat([combined_data, benchmark_combined], ignore_index=True)
-            csv_data = all_data.to_csv(index=False)
-            st.download_button(
-                label="Download All Data CSV",
-                data=csv_data,
-                file_name=f"{company.replace(' ', '_')}_complete_analysis.csv",
-                mime="text/csv"
-            )
+        if benchmark_frames:
+            benchmark_unified = pd.concat(benchmark_frames, ignore_index=True)
+            all_data = pd.concat([company_standardized, benchmark_unified], ignore_index=True)
+        else:
+            all_data = company_standardized
+        
+        csv_data = all_data.to_csv(index=False)
+        st.download_button(
+            label="Download All Data CSV",
+            data=csv_data,
+            file_name=f"{company.replace(' ', '_')}_complete_analysis.csv",
+            mime="text/csv"
+        )
 
-# Methodology Notes
 with st.expander("Methodology Notes"):
     st.markdown("""
     **Data Sources & Processing:**
