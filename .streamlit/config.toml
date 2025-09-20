@@ -1,0 +1,18 @@
+[theme]
+# Primary colors
+primaryColor = "#FF6B6B"
+backgroundColor = "#FFFFFF" 
+secondaryBackgroundColor = "#F8F9FA"
+textColor = "#262730"
+
+# Use light theme
+base = "light"
+
+[server]
+# Performance settings
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+# Gather usage stats
+gatherUsageStats = false

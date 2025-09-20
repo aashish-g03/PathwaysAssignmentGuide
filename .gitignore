@@ -128,8 +128,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Streamlit
-.streamlit/
 
 # macOS
 .DS_Store
