@@ -45,7 +45,6 @@ def load_benchmark_csv(path: str) -> pd.DataFrame:
             .str.replace(r'(\d+\.?\d*)\s+Degrees\s+(\([^)]+\))', r'\1°C \2', case=False, regex=True)
             .str.replace(r'(\d+\.?\d*)\s+Degrees', r'\1°C', case=False, regex=True)
             .str.replace(r'(Below\s+\d+\.?\d*)\s+Degrees', r'\1°C', case=False, regex=True)
-            .str.replace('International Pledges', 'National Pledges', case=False)
         )
     
     years = find_year_columns(raw)

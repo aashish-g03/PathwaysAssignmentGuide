@@ -5,9 +5,13 @@ import pandas as pd
 PALETTE = {
     "green": "#16A34A",
     "amber": "#F59E0B",
-    "red": "#EF4444",
     "gray": "#1F2937",
-    "orange_light": "#FDBA74"
+    "orange_light": "#FDBA74",
+    "orange_medium": "#FB923C", 
+    "orange_dark": "#EA580C",
+    "red_light": "#F87171",
+    "red_medium": "#EF4444",
+    "red_dark": "#DC2626"
 }
 
 def _band(fig, x, lower, upper, name, color_hex, opacity=0.20, outline=True):
@@ -46,11 +50,11 @@ def pathway_figure(df_company: pd.DataFrame, scenario_map: dict, unit_hint: str,
         "1.5°C": PALETTE["green"],
         "Below 2°C": PALETTE["amber"],
         "2°C": PALETTE["orange_light"],
-        "2°C (High Efficiency)": PALETTE["orange_light"],
-        "2°C (Shift-Improve)": PALETTE["orange_light"],
-        "Paris Pledges": PALETTE["red"],
-        "National Pledges": PALETTE["red"],
-        "International Pledges": PALETTE["red"]
+        "2°C (High Efficiency)": PALETTE["orange_medium"],
+        "2°C (Shift-Improve)": PALETTE["orange_dark"],
+        "Paris Pledges": PALETTE["red_light"],
+        "National Pledges": PALETTE["red_medium"],
+        "International Pledges": PALETTE["red_dark"]
     }
 
     green = scenario_map.get("1.5°C")
@@ -83,7 +87,7 @@ def pathway_figure(df_company: pd.DataFrame, scenario_map: dict, unit_hint: str,
         y2 = b2.set_index("Year").reindex(years)["Benchmark"].values
         y3 = pl.set_index("Year").reindex(years)["Benchmark"].values
         _band(fig, years, np.minimum(y2, y3), np.maximum(y2, y3),
-              "Above 2°C", PALETTE["red"], opacity=0.20)
+              "Above 2°C", PALETTE["red_medium"], opacity=0.20)
 
     for scenario_name, scenario_data in scenario_map.items():
         if scenario_data is None or scenario_data.empty:
