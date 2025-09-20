@@ -81,6 +81,7 @@ if 'Year' in f_cp.columns:
 
 # Build scenario series
 scenario_map = {}
+y0, y1 = year_range if 'Year' in f_cp.columns else (2015, 2035)
 for s in scenarios:
     q = (sb_long['Sector']==sector) & (sb_long['Scenario']==s)
     if region and 'Region' in sb_long.columns:
@@ -101,6 +102,12 @@ if 'Unit' in f_cp.columns:
 
 # Create display name with subsector info
 display_name = f"{company} ({subsector})" if subsector else company
+
+badge_scenarios = ', '.join(scenarios) if scenarios else 'None'
+badge_region = region if region else 'Global'
+badge_years = f"{y0}-{y1}"
+st.caption(f"**Sector:** {sector} • **Region:** {badge_region} • **Scenarios:** {badge_scenarios} • **Years:** {badge_years}")
+
 fig = pathway_figure(f_cp[['Year','Intensity']], scenario_map, unit_hint, display_name)
 st.plotly_chart(fig, use_container_width=True)
 

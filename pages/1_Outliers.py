@@ -50,17 +50,22 @@ with left:
     st.success('Companies performing better than sector benchmark')
     good_display = good.reset_index(drop=True)
     good_display.index = good_display.index + 1
+    if 'CBD' in good_display.columns:
+        good_display['CBD'] = good_display['CBD'].round(3)
     st.dataframe(good_display, width='stretch')
 with right:
     st.subheader('Worst Aligned Companies (Higher CBD)')
     st.warning('Companies lagging behind sector benchmark')  
     bad_display = bad.reset_index(drop=True)
     bad_display.index = bad_display.index + 1
+    if 'CBD' in bad_display.columns:
+        bad_display['CBD'] = bad_display['CBD'].round(3)
     st.dataframe(bad_display, width='stretch')
 
 st.caption("""
 **CBD** = Cumulative Benchmark Deviation (area under company-benchmark curve over selected years)  
-**z** = Z-score (standard deviations from sector average). Values beyond ±2 indicate statistical outliers.
+**z** = Z-score (standard deviations from sector average). Values beyond ±2 indicate statistical outliers.  
+**Negative CBD = better alignment** (company performing better than benchmark).
 """)
 
 # Download section for outliers
