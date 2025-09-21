@@ -70,7 +70,13 @@ with left:
             good_performers
             .reset_index(drop=True)
             .assign(cbd=lambda df: df['cbd'].round(3) if 'cbd' in df.columns else df.get('cbd', pd.Series()))
+            .assign(z_score=lambda df: df['z_score'].round(4) if 'z_score' in df.columns else df.get('z_score', pd.Series()))
         )
+        good_display = good_display.rename(columns={
+            'company': 'Company',
+            'cbd': 'CBD',
+            'z_score': 'Z Score'
+        })
         good_display.index = good_display.index + 1
         st.dataframe(good_display, use_container_width=True)
     else:
@@ -85,7 +91,13 @@ with right:
             poor_performers
             .reset_index(drop=True)
             .assign(cbd=lambda df: df['cbd'].round(3) if 'cbd' in df.columns else df.get('cbd', pd.Series()))
+            .assign(z_score=lambda df: df['z_score'].round(4) if 'z_score' in df.columns else df.get('z_score', pd.Series()))
         )
+        poor_display = poor_display.rename(columns={
+            'company': 'Company',
+            'cbd': 'CBD',
+            'z_score': 'Z Score'
+        })
         poor_display.index = poor_display.index + 1
         st.dataframe(poor_display, use_container_width=True)
     else:
