@@ -2,7 +2,7 @@ import os
 import streamlit as st
 import pandas as pd
 from src.io_utils import load_tables
-from src.analytics import view_outliers
+from src.analytics import view_outliers, detect_financial_outliers, rank_outlier_significance
 
 st.set_page_config(
     page_title='Outlier Analysis - TPI Dashboard',
@@ -178,3 +178,65 @@ with col3:
             file_name=f"all_outliers_{sector.replace(' ', '_')}_{start}_{end}.csv",
             mime="text/csv"
         )
+
+st.markdown("---")
+st.subheader("Financial Analysis Outliers")
+st.caption("Advanced multi-method outlier detection for investment analysis")
+
+use_advanced = st.checkbox("Enable Advanced Financial Analysis", value=False)
+
+if use_advanced:
+    try:
+        with st.spinner("Running advanced financial outlier analysis..."):
+            outlier_analysis = detect_financial_outliers(
+                fact_company, fact_benchmark, sector, 
+                scenarios=[scenario], confidence=0.95
+            )
+            ranked_outliers = rank_outlier_significance(
+                outlier_analysis, f"{sector} investment analysis"
+            )
+        
+        st.write("**High Opportunity Companies**")
+        if not ranked_outliers.high_opportunity.empty:
+            opp_df = ranked_outliers.high_opportunity[['company', 'significance', 'details']].head(5)
+            opp_display = opp_df.rename(columns={
+                'company': 'Company',
+                'significance': 'Significance',
+                'details': 'Details'
+            }).copy()
+            opp_display['Significance'] = opp_display['Significance'].round(4)
+            opp_display.index = range(1, len(opp_display) + 1)
+            st.dataframe(opp_display, use_container_width=True)
+        else:
+            st.info("No high opportunity outliers detected")
+        
+        st.write("**High Risk Companies**")
+        if not ranked_outliers.high_risk.empty:
+            risk_df = ranked_outliers.high_risk[['company', 'significance', 'details']].head(5)
+            risk_display = risk_df.rename(columns={
+                'company': 'Company',
+                'significance': 'Significance', 
+                'details': 'Details'
+            }).copy()
+            risk_display['Significance'] = risk_display['Significance'].round(4)
+            risk_display.index = range(1, len(risk_display) + 1)
+            st.dataframe(risk_display, use_container_width=True)
+        else:
+            st.info("No high risk outliers detected")
+        
+        if not ranked_outliers.volatile.empty:
+            st.write("**High Volatility Companies**")
+            vol_df = ranked_outliers.volatile[['company', 'details']].head(3)
+            vol_display = vol_df.rename(columns={
+                'company': 'Company',
+                'details': 'Details'
+            }).copy()
+            vol_display.index = range(1, len(vol_display) + 1)
+            st.dataframe(vol_display, use_container_width=True)
+        
+        method_name = "Multi-Metric Financial Analysis" if outlier_analysis.method_used == "multi_metric" else outlier_analysis.method_used.title()
+        st.write(f"**Analysis Summary**: {outlier_analysis.total_companies_analyzed} companies analyzed using {method_name} method at {outlier_analysis.confidence_level:.0%} confidence level")
+        
+    except Exception as e:
+        st.error(f"Error in advanced analysis: {str(e)}")
+        st.info("Using standard outlier analysis instead")

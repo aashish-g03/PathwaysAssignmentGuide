@@ -7,7 +7,7 @@ except Exception:
     load_tables = None
 
 from src.agent.router import IntentRouter
-from src.agent.handlers import definition_handler, slice_handler, explain_handler, diagnostics_handler
+from src.agent.handlers import definition_handler, slice_handler, explain_handler, diagnostics_handler, process_business_query
 
 st.set_page_config(page_title="Ask TPI Agent", layout="wide")
 st.title("Ask TPI Agent")
@@ -104,7 +104,7 @@ colL, colR = st.columns([2, 1], gap="large")
 with colL:
     q = st.text_input(
         "Question",
-        placeholder="Examples: Define CBD • Get Airlines Global 2015–2035 Below 2°C for Ryanair",
+        placeholder="Examples: Define CBD • Which steel companies are best positioned for 1.5°C? • Compare Ryanair vs airlines sector • Executive summary",
     )
 with colR:
     st.write("Current filters")
@@ -113,14 +113,22 @@ with colR:
         st.caption("Filters will be set automatically when you ask for data (e.g., 'Get Airlines data for Ryanair')")
 
 if not q:
-    st.info("Try: 'Define CBD', 'Get Cement Global 2015–2035 1.5°C for Lafarge', 'Explain this view', or 'Why is 2024 missing?'.")
+    st.info("Try: 'Define CBD', 'Which steel companies are best positioned?', 'Risk assessment for auto sector', 'Compare Ryanair vs peers', or 'Executive summary'.")
     st.stop()
 
 intent = router.detect(q)
 
 rep = None
 
-if intent == "definition":
+business_keywords = ['best positioned', 'top performers', 'investment', 'risk assessment', 
+                    'compare', 'vs', 'versus', 'sector analysis', 'executive summary', 
+                    'overview', 'outliers', 'falling behind', 'opportunities', 'dashboard']
+
+if any(keyword in q.lower() for keyword in business_keywords):
+    user_context = f"Sector: {state.get('sector', 'None')}, Company: {state.get('company', 'None')}"
+    rep = process_business_query(q, user_context, fact_company, fact_bench)
+
+elif intent == "definition":
     rep = definition_handler(q, resources)
 
 elif intent == "slice_request":
