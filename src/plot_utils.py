@@ -68,7 +68,7 @@ def pathway_figure(df_company: pd.DataFrame, scenario_map: dict, unit_hint: str,
     if green is not None and not green.empty:
         g = green.groupby("Year")["Benchmark"].mean().reset_index()
         y1 = g.set_index("Year").reindex(years)["Benchmark"].values.astype(float)
-        baseline = max(0.0, float(np.nanmin([np.nanmin(y1), cs["Intensity"].min()])))
+        baseline = max(0.0, float(np.nanmin([np.nanmin(y1), cs["Emissions per unit"].min()])))
         _band(fig, years, np.full_like(y1, baseline), y1, "Below 1.5°C", PALETTE["green"], opacity=0.12, outline=False)
 
     # Between 1.5°C and Below 2°C
@@ -103,7 +103,7 @@ def pathway_figure(df_company: pd.DataFrame, scenario_map: dict, unit_hint: str,
         ))
 
     fig.add_trace(go.Scatter(
-        x=cs["Year"], y=cs["Intensity"],
+        x=cs["Year"], y=cs["Emissions per unit"],
         mode="lines+markers",
         name=company,
         line=dict(color=PALETTE["gray"], width=2.5),
@@ -112,7 +112,7 @@ def pathway_figure(df_company: pd.DataFrame, scenario_map: dict, unit_hint: str,
 
     fig.update_layout(
         xaxis_title="Year",
-        yaxis_title=f"Intensity ({unit_hint})" if unit_hint else "Intensity",
+        yaxis_title=f"Emissions per unit ({unit_hint})" if unit_hint else "Emissions per unit",
         hovermode="x unified",
         margin=dict(l=10, r=10, t=40, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),

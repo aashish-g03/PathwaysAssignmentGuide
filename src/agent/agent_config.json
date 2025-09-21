@@ -1,4 +1,18 @@
 {
+  "company_regions": {
+    "apac": ["apac", "asia pacific", "asia-pacific", "asia"],
+    "emea": ["emea", "europe", "middle east", "africa", "mena"],
+    "amer": ["amer", "americas", "america", "north america", "south america", "latam", "latin america"]
+  },
+  "countries": [
+    "Australia", "Austria", "Belgium", "Brazil", "Canada", "Chile", "China", "Colombia",
+    "Czechia", "Denmark", "European Union", "Finland", "France", "Germany", "Greece",
+    "Hong Kong", "Hungary", "India", "Indonesia", "Ireland", "Israel", "Italy", "Japan",
+    "Kuwait", "Malaysia", "Mexico", "Netherlands", "New Zealand", "Nigeria", "Norway",
+    "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Saudi Arabia",
+    "Singapore", "South Africa", "South Korea", "Spain", "Sweden", "Switzerland",
+    "Taiwan", "Thailand", "Turkey", "United Arab Emirates", "United Kingdom", "United States of America"
+  ],
   "intents": {
     "definition": {
       "triggers": [
@@ -27,6 +41,8 @@
       "params": [
         "sector",
         "company",
+        "company_region",
+        "country",
         "region",
         "scenarios",
         "year_window"

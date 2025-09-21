@@ -2,7 +2,8 @@ import os
 import streamlit as st
 import pandas as pd
 from src.io_utils import load_tables
-from src.analytics import view_outliers
+from src.analytics import view_country_options_direct, detect_financial_outliers, rank_outlier_significance
+from src.outliers import sector_outliers
 
 st.set_page_config(
     page_title='Outlier Analysis - TPI Dashboard',
@@ -20,62 +21,64 @@ def load_fact_tables():
 fact_company, fact_benchmark = load_fact_tables()
 
 st.title('Company Outlier Analysis')
+st.caption("Find companies that stand out from their industry peers - both the best and worst performers")
 
 company_sectors = fact_company.index.get_level_values('sector').unique()
 benchmark_sectors = fact_benchmark.index.get_level_values('sector').unique()
 sectors_with_benchmarks = sorted(list(set(company_sectors) & set(benchmark_sectors)))
 
 if not sectors_with_benchmarks:
-    st.error('No sectors have both company and benchmark data for outlier analysis.')
+    st.warning('Sorry, we need more data to find outliers right now. Please check back later.')
     st.stop()
 
 st.info(f"Showing {len(sectors_with_benchmarks)} sectors with benchmark data out of {len(company_sectors)} total sectors.")
 
-c1, c2, c3, c4 = st.columns([2,2,1,1])
-sector = c1.selectbox('Sector', sectors_with_benchmarks)
+c1, c2, c3 = st.columns(3)
+sector = c1.selectbox('Industry', sectors_with_benchmarks)
 
 sector_bench_filter = fact_benchmark.index.get_level_values('sector') == sector
 sector_scenarios = fact_benchmark.loc[sector_bench_filter].index.get_level_values('scenario').unique()
 scenario_opts = sorted(sector_scenarios)
 
-scenario = c2.selectbox('Scenario', scenario_opts, index=0 if scenario_opts else None)
+scenario = c2.selectbox('Climate Target', scenario_opts, index=0 if scenario_opts else None, help="Different temperature goals - 1.5°C is most ambitious")
+country = c3.selectbox("Country", view_country_options_direct(fact_company, sector), index=0)
 
-region_pref = None
-sector_regions = fact_benchmark.loc[sector_bench_filter].index.get_level_values('region').unique()
-regions = sorted(sector_regions)
-if regions:
-    region_pref = c3.selectbox('Region preference', regions, index=0)
+region_pref = "Global"
 
-k = int(c4.number_input('Top K', min_value=3, max_value=30, value=10, step=1))
+c4, c5, c6 = st.columns(3)
+k = int(c4.number_input('Show top', min_value=3, max_value=30, value=10, step=1))
 
-c5, c6 = st.columns(2)
-start = int(c5.number_input('Start year', value=2020))
-end   = int(c6.number_input('End year',   value=2035))
+start = int(c5.number_input('From year', value=2020))
+end   = int(c6.number_input('To year', value=2035))
 
 st.subheader('Results')
 
-good_performers, poor_performers = view_outliers(
-    fact_company, fact_benchmark, 
-    sector=sector, scenario=scenario, 
-    region=region_pref, year_range=(start, end), 
-    exact_region=False, k=k
+good_performers, poor_performers = sector_outliers(
+    cp_long=fact_company, sb_long=fact_benchmark, 
+    sector=sector, scenario=scenario,
+    company_region=None,
+    country=None if country=="Global" else country,
+    start=start, end=end, k=k
 )
+
+st.caption(f"Comparing {sector} companies in {country} against {scenario} climate target from {start} to {end}")
 left, right = st.columns(2)
 with left:
-    st.subheader('Best Aligned Companies (Lower CBD)')
-    st.success('Companies performing better than sector benchmark')
+    st.subheader('Best Performing Companies')
+    st.success('Companies doing well compared to their industry peers')
 
     if not good_performers.empty:
         good_display = (
             good_performers
             .reset_index(drop=True)
-            .assign(cbd=lambda df: df['cbd'].round(3) if 'cbd' in df.columns else df.get('cbd', pd.Series()))
-            .assign(z_score=lambda df: df['z_score'].round(4) if 'z_score' in df.columns else df.get('z_score', pd.Series()))
+            .assign(cbd=lambda df: df['cbd'].round(3))
+            .assign(z_score=lambda df: df['z'].round(4))
+            .drop(columns=['z'])
         )
         good_display = good_display.rename(columns={
             'company': 'Company',
-            'cbd': 'CBD',
-            'z_score': 'Z Score'
+            'cbd': 'Climate Gap Score',
+            'z_score': 'Performance Score'
         })
         good_display.index = good_display.index + 1
         st.dataframe(good_display, use_container_width=True)
@@ -83,20 +86,21 @@ with left:
         st.info('No data available for selected criteria')
 
 with right:
-    st.subheader('Worst Aligned Companies (Higher CBD)')
-    st.warning('Companies lagging behind sector benchmark')
+    st.subheader('Worst Performing Companies')
+    st.warning('Companies falling behind their industry peers')
 
     if not poor_performers.empty:
         poor_display = (
             poor_performers
             .reset_index(drop=True)
-            .assign(cbd=lambda df: df['cbd'].round(3) if 'cbd' in df.columns else df.get('cbd', pd.Series()))
-            .assign(z_score=lambda df: df['z_score'].round(4) if 'z_score' in df.columns else df.get('z_score', pd.Series()))
+            .assign(cbd=lambda df: df['cbd'].round(3))
+            .assign(z_score=lambda df: df['z'].round(4))
+            .drop(columns=['z'])
         )
         poor_display = poor_display.rename(columns={
             'company': 'Company',
-            'cbd': 'CBD',
-            'z_score': 'Z Score'
+            'cbd': 'Climate Gap Score',
+            'z_score': 'Performance Score'
         })
         poor_display.index = poor_display.index + 1
         st.dataframe(poor_display, use_container_width=True)
@@ -104,9 +108,8 @@ with right:
         st.info('No data available for selected criteria')
 
 st.caption("""
-**CBD** = Cumulative Benchmark Deviation (area under company-benchmark curve over selected years)  
-**Z** = Z-score (standard deviations from sector average). Values beyond ±2 indicate statistical outliers.  
-**Negative CBD = better alignment** (company performing better than benchmark).
+**Climate Gap Score**: How far a company is from its climate target. Lower numbers are better. We are using Cumulative Budget Deviation (CBD) to measure this.  
+**Performance Score**: How a company compares to industry average. Higher absolute values indicate outliers. We are using Z-score to measure this.
 """)
 
 st.subheader('Downloads')
@@ -127,9 +130,9 @@ with col1:
             good_download = good_download.assign(Region=region_pref)
         csv_data = good_download.to_csv(index=False)
         st.download_button(
-            label="Download Best Aligned CSV",
+            label="Download Best Performers",
             data=csv_data,
-            file_name=f"best_aligned_{sector.replace(' ', '_')}_{start}_{end}.csv",
+            file_name=f"best_performers_{sector.replace(' ', '_')}_{start}_{end}.csv",
             mime="text/csv"
         )
 
@@ -149,9 +152,9 @@ with col2:
         
         csv_data = poor_download.to_csv(index=False)
         st.download_button(
-            label="Download Worst Aligned CSV",
+            label="Download Worst Performers",
             data=csv_data,
-            file_name=f"worst_aligned_{sector.replace(' ', '_')}_{start}_{end}.csv",
+            file_name=f"worst_performers_{sector.replace(' ', '_')}_{start}_{end}.csv",
             mime="text/csv"
         )
 
@@ -173,8 +176,69 @@ with col3:
             combined_outliers = combined_outliers.assign(Region=region_pref)
         csv_data = combined_outliers.to_csv(index=False)
         st.download_button(
-            label="Download All Outliers CSV",
+            label="Download All Outliers",
             data=csv_data,
             file_name=f"all_outliers_{sector.replace(' ', '_')}_{start}_{end}.csv",
             mime="text/csv"
         )
+
+st.markdown("---")
+st.subheader("Investment Analysis")
+st.caption("Find companies with the highest investment potential and risk")
+
+use_advanced = st.checkbox("Show investment analysis", value=False, help="Uses additional financial metrics to identify opportunities and risks")
+
+if use_advanced:
+    try:
+        with st.spinner("Analyzing investment opportunities..."):
+            outlier_analysis = detect_financial_outliers(
+                fact_company, fact_benchmark, sector, 
+                scenarios=[scenario], confidence=0.95
+            )
+            ranked_outliers = rank_outlier_significance(
+                outlier_analysis, f"{sector} investment analysis"
+            )
+        
+        st.write("**Investment Opportunities**")
+        if not ranked_outliers.high_opportunity.empty:
+            opp_df = ranked_outliers.high_opportunity[['company', 'significance', 'details']].head(5)
+            opp_display = opp_df.rename(columns={
+                'company': 'Company',
+                'significance': 'Significance',
+                'details': 'Details'
+            }).copy()
+            opp_display['Significance'] = opp_display['Significance'].round(4)
+            opp_display.index = range(1, len(opp_display) + 1)
+            st.dataframe(opp_display, use_container_width=True)
+        else:
+            st.info("No clear investment opportunities found")
+        
+        st.write("**High Risk Companies**")
+        if not ranked_outliers.high_risk.empty:
+            risk_df = ranked_outliers.high_risk[['company', 'significance', 'details']].head(5)
+            risk_display = risk_df.rename(columns={
+                'company': 'Company',
+                'significance': 'Significance', 
+                'details': 'Details'
+            }).copy()
+            risk_display['Significance'] = risk_display['Significance'].round(4)
+            risk_display.index = range(1, len(risk_display) + 1)
+            st.dataframe(risk_display, use_container_width=True)
+        else:
+            st.info("No high risk companies identified")
+        
+        if not ranked_outliers.volatile.empty:
+            st.write("**Unpredictable Companies**")
+            vol_df = ranked_outliers.volatile[['company', 'details']].head(3)
+            vol_display = vol_df.rename(columns={
+                'company': 'Company',
+                'details': 'Details'
+            }).copy()
+            vol_display.index = range(1, len(vol_display) + 1)
+            st.dataframe(vol_display, use_container_width=True)
+        
+        st.write(f"**Summary**: Analyzed {outlier_analysis.total_companies_analyzed} companies to find investment opportunities and risks")
+        
+    except Exception as e:
+        st.error(f"Could not complete investment analysis: {str(e)}")
+        st.info("Try using the basic outlier analysis above")

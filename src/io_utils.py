@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
+import re
 from pathlib import Path
 
 def find_year_columns(df: pd.DataFrame) -> list:
@@ -13,6 +14,15 @@ def find_year_columns(df: pd.DataFrame) -> list:
         except (ValueError, TypeError):
             continue
     return sorted(year_cols)
+
+
+def _load_geo_regions(path="resources/geo_regions.csv"):
+    if os.path.exists(path):
+        m = pd.read_csv(path)
+        m["geo_key"] = m["geography"].astype(str).str.strip().str.lower()
+        m["company_region"] = m["company_region"].astype(str).str.strip()
+        return dict(zip(m["geo_key"], m["company_region"]))
+    return {}
 
 def build_tables(cp_csv_path: str, sb_csv_path: str) -> tuple:
     
@@ -34,6 +44,13 @@ def build_tables(cp_csv_path: str, sb_csv_path: str) -> tuple:
     
     if 'Company Name' in fact_company.columns:
         fact_company = fact_company.rename(columns={'Company Name': 'Company'})
+    
+    geo_map = _load_geo_regions()
+    if "Geography" in fact_company.columns:
+        fact_company["companyregion"] = fact_company["Geography"].astype(str).str.strip().str.lower().map(geo_map)
+        fact_company["companyregion"] = fact_company["companyregion"].fillna("Unknown")
+    else:
+        fact_company["companyregion"] = "Unknown"
     
     for col in ['Company', 'Sector', 'Subsector', 'Unit']:
         if col in fact_company.columns:
@@ -159,37 +176,3 @@ def join_company_benchmark(fact_company, fact_benchmark, sector, company, region
     
     return company_series, scen_lines
 
-def load_company_csv(path: str) -> pd.DataFrame:
-    raw = pd.read_csv(path)
-    years = find_year_columns(raw)
-    id_cols = [c for c in ['Company','Sector','Geography','Region','Subsector','Unit'] if c in raw.columns]
-    long = raw.melt(id_vars=id_cols, value_vars=years, var_name='Year', value_name='Intensity')
-    long['Year'] = long['Year'].astype(int)
-    return long
-
-def load_benchmark_csv(path: str) -> pd.DataFrame:
-    raw = pd.read_csv(path)
-    if 'Release date' in raw.columns:
-        raw['Release date'] = pd.to_datetime(raw['Release date'], format='%d/%m/%Y')
-        group_cols = ['Sector name' if 'Sector name' in raw.columns else 'Sector',
-                     'Scenario name' if 'Scenario name' in raw.columns else 'Scenario', 
-                     'Region']
-        raw = raw.sort_values('Release date', ascending=False).drop_duplicates(subset=group_cols, keep='first')
-    
-    ren = {}
-    if 'Sector name' in raw.columns: ren['Sector name'] = 'Sector'
-    if 'Scenario name' in raw.columns: ren['Scenario name'] = 'Scenario'
-    raw = raw.rename(columns=ren)
-    
-    if 'Scenario' in raw.columns:
-        raw['Scenario'] = (raw['Scenario'].astype(str)
-            .str.replace(r'(\d+\.?\d*)\s+Degrees\s+(\([^)]+\))', r'\1°C \2', case=False, regex=True)
-            .str.replace(r'(\d+\.?\d*)\s+Degrees', r'\1°C', case=False, regex=True)
-            .str.replace(r'(Below\s+\d+\.?\d*)\s+Degrees', r'\1°C', case=False, regex=True)
-        )
-    
-    years = find_year_columns(raw)
-    id_cols = [c for c in ['Sector','Region','Scenario','Unit'] if c in raw.columns]
-    long = raw.melt(id_vars=id_cols, value_vars=years, var_name='Year', value_name='Benchmark')
-    long['Year'] = long['Year'].astype(int)
-    return long

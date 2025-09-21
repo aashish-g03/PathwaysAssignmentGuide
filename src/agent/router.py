@@ -1,6 +1,6 @@
-import re, json
+import re
 from dataclasses import dataclass
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Optional
 
 @dataclass
 class Reply:
@@ -22,7 +22,7 @@ class IntentRouter:
                     return intent
         if re.search(r"\bwhat is|define|cbd|scenario|unit|methodology\b", qs):
             return "definition"
-        if re.search(r"\bget|show|download|export|filter|slice|compare\b", qs):
+        if re.search(r"\bget|show|download|export|filter|slice|compare|companies|company\b", qs):
             return "slice_request"
         if re.search(r"\bexplain|summarize|delta\b", qs):
             return "explain_view"

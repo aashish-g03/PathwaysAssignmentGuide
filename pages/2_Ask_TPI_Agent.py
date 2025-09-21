@@ -7,7 +7,7 @@ except Exception:
     load_tables = None
 
 from src.agent.router import IntentRouter
-from src.agent.handlers import definition_handler, slice_handler, explain_handler, diagnostics_handler
+from src.agent.handlers import definition_handler, slice_handler, explain_handler, diagnostics_handler, process_business_query
 
 st.set_page_config(page_title="Ask TPI Agent", layout="wide")
 st.title("Ask TPI Agent")
@@ -53,13 +53,11 @@ def _read_state():
     }
 
 def _normalize_filters(d):
-    """Return a normalized dict so equality is stable across runs."""
     out = {}
     for k, v in (d or {}).items():
         if k == "scenarios":
             out[k] = sorted(list(v)) if v is not None else []
         elif k == "year_window":
-            # store as tuple of ints
             if isinstance(v, (list, tuple)) and len(v) == 2:
                 out[k] = (int(v[0]), int(v[1]))
             else:
@@ -103,49 +101,56 @@ if st.session_state["agent_flash"]:
 colL, colR = st.columns([2, 1], gap="large")
 with colL:
     q = st.text_input(
-        "Question",
-        placeholder="Examples: Define CBD • Get Airlines Global 2015–2035 Below 2°C for Ryanair",
+        "What would you like to know?",
+        placeholder="Examples: Define CBD, Steel companies in China, Get Airlines data for Ryanair, Risk assessment for auto sector, Investment opportunities in cement, Executive summary",
     )
 with colR:
-    st.write("Current filters")
+    st.write("Current settings")
     st.json(state)
     if not any([state["sector"], state["company"], state["region"], state["scenarios"]]):
         st.caption("Filters will be set automatically when you ask for data (e.g., 'Get Airlines data for Ryanair')")
 
 if not q:
-    st.info("Try: 'Define CBD', 'Get Cement Global 2015–2035 1.5°C for Lafarge', 'Explain this view', or 'Why is 2024 missing?'.")
+    st.info("Try: 'Define CBD', 'Steel companies in China', 'Get Airlines data for Ryanair', 'Risk assessment for auto sector', 'Investment opportunities in cement', or 'Executive summary'.")
     st.stop()
 
-intent = router.detect(q)
+business_keywords = ['best positioned', 'top performers', 'investment', 'risk assessment', 
+                    'compare', 'vs', 'versus', 'sector analysis', 'executive summary', 
+                    'overview', 'outliers', 'falling behind', 'opportunities', 'dashboard']
 
 rep = None
 
-if intent == "definition":
-    rep = definition_handler(q, resources)
-
-elif intent == "slice_request":
-    rep = slice_handler(q, state, fact_company, fact_bench)
-
-    if getattr(rep, "set_filters", None):
-        newf = _normalize_filters(rep.set_filters)
-        curf = _current_normalized()
-
-        subset_cur = {k: curf.get(k) for k in newf.keys()}
-        if newf != subset_cur:
-            for k, v in newf.items():
-                key = f"agent_{k}"
-                if k == "scenarios":
-                    v = list(v)
-                st.session_state[key] = v
-            st.session_state["agent_last_applied"] = newf
-            st.session_state["agent_flash"] = "Filters updated from your query."
-            st.rerun()
-
-elif intent == "explain_view":
-    rep = explain_handler(q, state, fact_company, fact_bench)
+if any(keyword in q.lower() for keyword in business_keywords):
+    user_context = f"Sector: {state.get('sector', 'None')}, Company: {state.get('company', 'None')}"
+    rep = process_business_query(q, user_context, fact_company, fact_bench)
 
 else:
-    rep = diagnostics_handler(q, state, fact_company, fact_bench)
+    intent = router.detect(q)
+    
+    if intent == "definition":
+        rep = definition_handler(q, resources)
+
+    elif intent == "slice_request":
+        rep = slice_handler(q, state, fact_company, fact_bench)
+
+        if getattr(rep, "set_filters", None):
+            newf = _normalize_filters(rep.set_filters)
+            curf = _current_normalized()
+
+            subset_cur = {k: curf.get(k) for k in newf.keys()}
+            if newf != subset_cur:
+                for k, v in newf.items():
+                    key = f"agent_{k}"
+                    if k == "scenarios":
+                        v = list(v)
+                    st.session_state[key] = v
+                st.session_state["agent_last_applied"] = newf
+
+    elif intent == "explain_view":
+        rep = explain_handler(q, state, fact_company, fact_bench)
+    
+    else:
+        rep = diagnostics_handler(q, state, fact_company, fact_bench)
 
 st.markdown(f"**Intent:** `{rep.intent}`")
 st.markdown(rep.text)

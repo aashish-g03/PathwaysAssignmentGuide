@@ -4,11 +4,12 @@ import pandas as pd
 
 from src.io_utils import load_tables
 from src.analytics import (view_pathway, view_sector_companies, view_company_year_bounds,
-                         view_company_subsectors, view_sector_regions_scenarios)
+                         view_company_subsectors, view_sector_regions_scenarios,
+                         view_sector_companies_by_country, view_country_options_direct)
 from src.plot_utils import pathway_figure
 
 st.set_page_config(
-    page_title='Company Pathways - TPI Dashboard',
+    page_title='Company Climate Performance - TPI Dashboard',
     layout='wide',
     initial_sidebar_state='expanded'
 )
@@ -20,7 +21,8 @@ DATA_BENCH   = 'data/Sector_Benchmarks_19092025.csv'
 def load_fact_tables():
     return load_tables()
 
-st.title('Company Pathways')
+st.title('Company Climate Performance')
+st.caption("Track how companies are progressing toward their climate goals")
 
 # Load data from CSV files in form of fact tables
 fact_company, fact_benchmark = load_fact_tables()
@@ -31,17 +33,18 @@ benchmark_sectors = fact_benchmark.index.get_level_values('sector').unique()
 sectors_with_data = sorted(list(company_sectors))
 sectors_with_benchmarks = sorted(list(set(company_sectors) & set(benchmark_sectors)))
 
-if not sectors_with_data:
-    st.error('No company sector data available.')
-    st.stop()
 
 col1, col2 = st.columns(2)
 with col1:
     sector = st.selectbox('Sector', sectors_with_data)
+    country = st.selectbox("Country", view_country_options_direct(fact_company, sector), index=0)
     
-    companies = view_sector_companies(fact_company, sector)
+    companies = view_sector_companies_by_country(fact_company, sector, country)
+    if not companies:
+        st.error(f"No companies found for the selected filters.")
+        st.stop()
+        
     company = st.selectbox('Company', companies)
-    
     subsectors = view_company_subsectors(fact_company, sector, company)
     
     subsector = None
@@ -98,11 +101,12 @@ if 'unit' in company_df.columns:
 display_name = f"{company} ({subsector})" if subsector else company
 badge_scenarios = ', '.join(scenarios) if scenarios else 'None'
 badge_region = region if region else 'Global'
-y_start, y_end = year_range
-badge_years = f"{y_start}-{y_end}"
-st.caption(f"**Sector:** {sector} • **Region:** {badge_region} • **Scenarios:** {badge_scenarios} • **Years:** {badge_years}")
 
-visualization_data = company_df[['year', 'intensity']].rename(columns={'year': 'Year', 'intensity': 'Intensity'})
+y_start, y_end = year_range
+st.caption(f"**Sector:** {sector} • **Country:** {country} • "
+          f"**Benchmark:** {badge_region} • **Scenarios:** {badge_scenarios} • **Years:** {y_start}–{y_end}")
+
+visualization_data = company_df[['year', 'intensity']].rename(columns={'year': 'Year', 'intensity': 'Emissions per unit'})
 scenario_map_viz = {k: v.rename(columns={'year': 'Year', 'benchmark': 'Benchmark'}) for k, v in scenario_map.items()}
 
 fig = pathway_figure(visualization_data, scenario_map_viz, unit_hint, display_name)
@@ -113,7 +117,7 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     if not company_df.empty:
-        company_download = company_df[['year', 'intensity']].rename(columns={'year': 'Year', 'intensity': 'Intensity'})
+        company_download = company_df[['year', 'intensity']].rename(columns={'year': 'Year', 'intensity': 'Emissions per unit'})
         company_download = company_download.assign(
             Company=display_name,
             Sector=sector
@@ -160,7 +164,7 @@ with col3:
     if scenario_map and not company_df.empty:
         company_standardized = (
             company_df[['year', 'intensity']]
-            .rename(columns={'year': 'Year', 'intensity': 'Intensity'})
+            .rename(columns={'year': 'Year', 'intensity': 'Emissions per unit'})
             .assign(
                 Company=display_name,
                 Sector=sector,
@@ -178,7 +182,7 @@ with col3:
             if not scenario_data.empty:
                 scenario_standardized = (
                     scenario_data
-                    .rename(columns={'year': 'Year', 'benchmark': 'Intensity'})
+                    .rename(columns={'year': 'Year', 'benchmark': 'Emissions per unit'})
                     .assign(
                         Company=display_name,
                         Sector=sector,
